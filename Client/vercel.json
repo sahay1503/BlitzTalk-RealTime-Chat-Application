@@ -1,8 +1,12 @@
 {
-  "routes": [
+  "rewrites": [
     {
-      "src": "/[^.]+",
-      "dest": "/"
+      "source": "/api/:path*",
+      "destination": "https://blitztalk-realtime-chat-application-1.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/"
     }
   ]
 }

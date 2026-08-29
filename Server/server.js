@@ -12,14 +12,29 @@ import { trainModel } from "./data.js";
 dotenv.config();
 
 const PORT = process.env.PORT || 5000;
-const MONGO_URL =
-  process.env.ATLAS_URI || "mongodb://127.0.0.1:27017/BlitzTalk";
+const MONGO_URL = process.env.ATLAS_URI || "mongodb://127.0.0.1:27017/BlitzTalk";
+
+// Allowed origins: Vercel frontend + local dev
+const allowedOrigins = [
+  process.env.CLIENT_URL || "http://localhost:5173",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl)
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS blocked: ${origin}`));
+    },
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
 
-// MongoDB connection code remains unchanged
 async function main() {
   await mongoose.connect(MONGO_URL);
 }
@@ -45,12 +60,16 @@ const server = app.listen(PORT, () => {
   console.log(`Server responding on Port: ${PORT}`);
 });
 
-// Socket.IO server instance
+// Socket.IO — allow same origins as Express CORS
 const io = new socketIOServer(server, {
   pingTimeout: 60000,
   cors: {
-    origin: "http://localhost:5173",
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true,
   },
+  // Required for Render's infrastructure (no sticky sessions on free tier)
+  transports: ["websocket", "polling"],
 });
 
 const onlineUsers = new Map();
@@ -88,12 +107,8 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.off("setup", () => {
-    console.log("USER DISCONNECTED");
-    socket.leave(userData._id);
-  });
-
-  socket.on("disconnect", () => {
+  socket.on("disconnect", (reason) => {
+    console.log(`Socket disconnected: ${socket.userId} — ${reason}`);
     if (socket.userId) {
       onlineUsers.delete(socket.userId);
       io.emit("online users", Array.from(onlineUsers.keys()));
@@ -101,12 +116,9 @@ io.on("connection", (socket) => {
   });
 });
 
-// Call the trainModel function to train the model when the server starts
 main()
-  .then(() => {
-    console.log("Connection to DB successful");
-  })
+  .then(() => console.log("Connection to DB successful"))
   .catch((err) => {
-    console.error("Error connecting to the database:", err);
+    console.error("MongoDB connection failed:", err.message);
     process.exit(1);
   });

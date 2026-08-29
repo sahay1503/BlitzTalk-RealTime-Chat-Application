@@ -5,7 +5,6 @@ import { setOnlineUsers, setNotification, setEmotion, incrementUnread } from "..
 
 const ENDPOINT = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
 
-// Singleton socket — one connection for the entire app lifetime
 let socketInstance = null;
 
 export const useSocket = () => {
@@ -24,13 +23,21 @@ export const useSocket = () => {
     if (!user) return;
 
     if (!socketInstance) {
-      socketInstance = io(ENDPOINT, { transports: ["websocket"] });
+      socketInstance = io(ENDPOINT, { transports: ["websocket", "polling"] });
     }
 
     socketInstance.emit("setup", user);
 
     socketInstance.on("connected", () => {
       console.log("Socket connected");
+    });
+
+    socketInstance.on("connect_error", (err) => {
+      console.error("Socket connection error:", err.message);
+    });
+
+    socketInstance.on("disconnect", (reason) => {
+      console.warn("Socket disconnected:", reason);
     });
 
     // Online users list from server
