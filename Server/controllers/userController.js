@@ -60,6 +60,7 @@ const authUser = asyncHandler(async (req, res, next) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      language: user.language,
       pic: user.pic,
       token: generateToken(user._id),
     });

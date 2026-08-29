@@ -1,4 +1,24 @@
+# Ignore node_modules at every level
+node_modules/
+
+# Environment files
 .env
-/node_modules
+.env.*
+
+# NLP model file
 model.nlp
+
+# Server generated file
 /Server/utils/detectEmotion.js
+
+# Build output
+dist/
+dist-ssr/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,230 +1,167 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Button,
-  FormControl,
-  FormLabel,
-  Input,
-  InputAdornment,
-  IconButton,
-  Box,
-  CircularProgress,
+  Button, TextField, InputAdornment, IconButton, Box, Typography,
+  CircularProgress, Avatar, LinearProgress, Autocomplete,
 } from "@mui/material";
-import { Visibility, VisibilityOff, CloudUpload } from "@mui/icons-material";
+import { Visibility, VisibilityOff, Email, Lock, Person, Language, CloudUpload } from "@mui/icons-material";
 import axios from "axios";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { toast } from "react-toastify";
 import { useDispatch } from "react-redux";
 import { setUser } from "../../features/chat/chatSlice";
-const Signup = () => {
+import { countries } from "../../json/countries";
+
+const LANGUAGE_OPTIONS = Object.keys(countries).sort();
+
+const Signup = ({ onSwitchToLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
-  const [language, setLanguage] = useState(""); // State for storing selected language
-  const handleClickShowPassword = () => setShowPassword(!showPassword);
-  const history = useNavigate();
-  const dispatch = useDispatch();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [confirmpassword, setConfirmpassword] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmpassword, setConfirmpassword] = useState("");
+  const [language, setLanguage] = useState(null);
   const [pic, setPic] = useState(null);
+  const [picPreview, setPicPreview] = useState(null);
   const [picLoading, setPicLoading] = useState(false);
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    postDetails(file);
-  };
-
-  const submitHandler = async (e) => {
-    e.preventDefault();
-    setPicLoading(true);
-
-    try {
-      if (!name || !email || !password || !confirmpassword || !language) {
-        // Check if language is selected
-        toast.warning("Please Fill all the Fields", {
-          position: toast.POSITION
-            ? toast.POSITION.BOTTOM_RIGHT
-            : "bottom-right",
-          autoClose: 4000,
-        });
-        setPicLoading(false);
-        return;
-      }
-
-      if (password !== confirmpassword) {
-        toast.error("Passwords Do Not Match", {
-          position: toast.POSITION
-            ? toast.POSITION.BOTTOM_RIGHT
-            : "bottom-right",
-          autoClose: 5000,
-        });
-        setPicLoading(false);
-        return;
-      }
-
-      const config = {
-        headers: {
-          "Content-type": "application/json",
-        },
-      };
-
-      const { data } = await axios.post(
-        "/api/user",
-        {
-          name,
-          email,
-          password,
-          language, // Include language in the request body
-          pic,
-        },
-        config
-      );
-
-      toast.success("Registration Successful", {
-        position: toast.POSITION ? toast.POSITION.BOTTOM_RIGHT : "bottom-right",
-        autoClose: 5000,
-      });
-
-      localStorage.setItem("userInfo", JSON.stringify(data));
-      dispatch(setUser(data));
-      setPicLoading(false);
-      history("/chats");
-    } catch (error) {
-      toast.error(
-        `Error Occurred: ${error.response?.data?.message || "Unknown error"}`,
-        {
-          position: toast.POSITION
-            ? toast.POSITION.BOTTOM_RIGHT
-            : "bottom-right",
-          autoClose: 5000,
-        }
-      );
-      setPicLoading(false);
+  const postDetails = async (file) => {
+    if (!file) return;
+    if (file.type !== "image/jpeg" && file.type !== "image/png") {
+      toast.error("Only JPEG/PNG images allowed"); return;
     }
-  };
-
-  const postDetails = async (pics) => {
+    setPicPreview(URL.createObjectURL(file));
     setPicLoading(true);
-
     try {
-      if (pics && (pics.type === "image/jpeg" || pics.type === "image/png")) {
-        const formData = new FormData();
-        formData.append("file", pics);
-        formData.append("upload_preset", "ChatApp");
-        formData.append("cloud_name", "dgvy8j9np");
-
-        const response = await axios.post(
-          import.meta.env.VITE_CLOUDINARY,
-          formData
-        );
-
-        setPic(response.data.url);
-
-        toast.success("File Uploaded Successfully", {
-          position: toast.POSITION
-            ? toast.POSITION.BOTTOM_RIGHT
-            : "bottom-right",
-          autoClose: 5000,
-        });
-      } else {
-        throw new Error("Invalid file format");
-      }
-    } catch (error) {
-      console.error("File upload failed:", error);
-
-      toast.error(`Error: ${error.message || "Unknown error"}`, {
-        position: toast.POSITION ? toast.POSITION.BOTTOM_RIGHT : "bottom-right",
-        autoClose: 5000,
-      });
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", "ChatApp");
+      formData.append("cloud_name", "dgvy8j9np");
+      const { data } = await axios.post(import.meta.env.VITE_CLOUDINARY, formData);
+      setPic(data.url);
+      toast.success("Photo uploaded!");
+    } catch {
+      toast.error("Photo upload failed");
+      setPicPreview(null);
     } finally {
       setPicLoading(false);
     }
   };
 
+  const submitHandler = async (e) => {
+    e.preventDefault();
+    if (!name || !email || !password || !confirmpassword || !language) {
+      toast.warning("Please fill all fields"); return;
+    }
+    if (password !== confirmpassword) {
+      toast.error("Passwords do not match"); return;
+    }
+    setPicLoading(true);
+    try {
+      const { data } = await axios.post("/api/user", { name, email, password, language, pic }, {
+        headers: { "Content-type": "application/json" },
+      });
+      toast.success("Account created!");
+      localStorage.setItem("userInfo", JSON.stringify(data));
+      dispatch(setUser(data));
+      setPicLoading(false);
+      navigate("/chats");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Registration failed");
+      setPicLoading(false);
+    }
+  };
+
   return (
-    <Box display="flex" flexDirection="column" gap={2}>
-      <ToastContainer />
-      <FormControl fullWidth required>
-        <FormLabel>Name</FormLabel>
-        <Input
-          placeholder="Enter Your Name"
-          onChange={(e) => setName(e.target.value)}
-        />
-      </FormControl>
-      <FormControl fullWidth required>
-        <FormLabel>Email Address</FormLabel>
-        <Input
-          type="email"
-          placeholder="Enter Your Email Address"
-          onChange={(e) => setEmail(e.target.value)}
-        />
-      </FormControl>
-      <FormControl fullWidth required>
-        <FormLabel>Password</FormLabel>
-        <Input
-          type={showPassword ? "text" : "password"}
-          placeholder="Enter Password"
-          onChange={(e) => setPassword(e.target.value)}
-          endAdornment={
-            <InputAdornment position="end">
-              <IconButton onClick={handleClickShowPassword}>
-                {showPassword ? <Visibility /> : <VisibilityOff />}
-              </IconButton>
-            </InputAdornment>
-          }
-        />
-      </FormControl>
-      <FormControl fullWidth required>
-        <FormLabel>Confirm Password</FormLabel>
-        <Input
-          type={showPassword ? "text" : "password"}
-          placeholder="Confirm password"
-          onChange={(e) => setConfirmpassword(e.target.value)}
-          endAdornment={
-            <InputAdornment position="end">
-              <IconButton onClick={handleClickShowPassword}>
-                {showPassword ? <Visibility /> : <VisibilityOff />}
-              </IconButton>
-            </InputAdornment>
-          }
-        />
-      </FormControl>
-      <FormControl fullWidth required>
-        <FormLabel>Language</FormLabel>
-        <Input
-          placeholder="Enter Your Preferred Language"
-          onChange={(e) => setLanguage(e.target.value)}
-        />
-      </FormControl>
-      <FormControl fullWidth>
-        <FormLabel>Upload your Picture</FormLabel>
-        <Input
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          endAdornment={
-            <InputAdornment position="end">
-              <IconButton component="label">
-                <CloudUpload />
-              </IconButton>
-            </InputAdornment>
-          }
-        />
-      </FormControl>
-      <Button
-        variant="contained"
-        color="primary"
-        size="large"
-        onClick={submitHandler}
-        disabled={picLoading}
-        style={{ marginTop: "15px" }}
-        type="submit"
-      >
-        {picLoading ? (
-          <CircularProgress size={24} color="inherit" />
-        ) : (
-          "Sign Up"
+    <Box display="flex" flexDirection="column" gap={2.5}>
+      <Box mb={0.5}>
+        <Typography variant="h5" fontWeight={700} color="text.primary" letterSpacing="-0.02em">
+          Create account
+        </Typography>
+        <Typography variant="body2" color="text.secondary" mt={0.5}>
+          Fill in the details below to get started
+        </Typography>
+      </Box>
+
+      {/* Avatar upload */}
+      <Box display="flex" alignItems="center" gap={2}>
+        <Avatar src={picPreview} sx={{ width: 52, height: 52, bgcolor: "action.selected", border: "2px solid", borderColor: "divider" }}>
+          {name ? name[0]?.toUpperCase() : <Person sx={{ color: "text.disabled" }} />}
+        </Avatar>
+        <Button
+          component="label"
+          variant="outlined"
+          size="small"
+          startIcon={picLoading ? <CircularProgress size={13} /> : <CloudUpload sx={{ fontSize: 16 }} />}
+          disabled={picLoading}
+          sx={{ borderColor: "divider", color: "text.secondary", fontWeight: 500, borderRadius: "7px",
+            "&:hover": { borderColor: "primary.main", color: "primary.main" } }}
+        >
+          {picLoading ? "Uploading..." : "Upload Photo"}
+          <input type="file" accept="image/*" hidden onChange={(e) => postDetails(e.target.files[0])} />
+        </Button>
+      </Box>
+      {picLoading && <LinearProgress sx={{ borderRadius: 4 }} />}
+
+      <TextField
+        label="Full Name" value={name} onChange={(e) => setName(e.target.value)} fullWidth
+        InputProps={{ startAdornment: <InputAdornment position="start"><Person sx={{ fontSize: 18, color: "text.disabled" }} /></InputAdornment> }}
+      />
+
+      <TextField
+        label="Email Address" type="email" value={email} onChange={(e) => setEmail(e.target.value)} fullWidth
+        InputProps={{ startAdornment: <InputAdornment position="start"><Email sx={{ fontSize: 18, color: "text.disabled" }} /></InputAdornment> }}
+      />
+
+      <Autocomplete
+        options={LANGUAGE_OPTIONS}
+        value={language}
+        onChange={(_, val) => setLanguage(val)}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Preferred Language"
+            InputProps={{
+              ...params.InputProps,
+              startAdornment: (
+                <>
+                  <InputAdornment position="start"><Language sx={{ fontSize: 18, color: "text.disabled" }} /></InputAdornment>
+                  {params.InputProps.startAdornment}
+                </>
+              ),
+            }}
+          />
         )}
+      />
+
+      <TextField
+        label="Password" type={showPassword ? "text" : "password"}
+        value={password} onChange={(e) => setPassword(e.target.value)} fullWidth
+        InputProps={{
+          startAdornment: <InputAdornment position="start"><Lock sx={{ fontSize: 18, color: "text.disabled" }} /></InputAdornment>,
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton onClick={() => setShowPassword(!showPassword)} size="small">
+                {showPassword ? <Visibility sx={{ fontSize: 18 }} /> : <VisibilityOff sx={{ fontSize: 18 }} />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+      />
+
+      <TextField
+        label="Confirm Password" type={showPassword ? "text" : "password"}
+        value={confirmpassword} onChange={(e) => setConfirmpassword(e.target.value)} fullWidth
+        InputProps={{ startAdornment: <InputAdornment position="start"><Lock sx={{ fontSize: 18, color: "text.disabled" }} /></InputAdornment> }}
+      />
+
+      <Button
+        variant="contained" size="large" onClick={submitHandler}
+        disabled={picLoading} fullWidth
+        sx={{ py: 1.4, fontWeight: 600, fontSize: "0.9rem", mt: 0.5 }}
+      >
+        {picLoading ? <CircularProgress size={20} color="inherit" /> : "Create Account"}
       </Button>
     </Box>
   );

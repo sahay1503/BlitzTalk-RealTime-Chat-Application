@@ -1,66 +1,48 @@
 import React from "react";
-import { Box, useTheme, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import SingleChat from "./SingleChat";
 import { useSelector } from "react-redux";
-import RotatingLogo from "./RotatingLogo";
+import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
+
 const Chatbox = ({ fetchAgain, setFetchAgain }) => {
-  const theme = useTheme();
   const selectedChat = useSelector((state) => state.chat.selectedChat);
 
   return (
-    <>
+    <Box sx={{
+      flex: 1, minHeight: 0, alignSelf: "stretch",
+      display: { xs: selectedChat ? "flex" : "none", md: "flex" },
+      flexDirection: "column",
+      bgcolor: "background.paper",
+      borderRadius: "10px",
+      border: "1px solid",
+      borderColor: "divider",
+      overflow: "hidden",
+    }}>
       {selectedChat ? (
-        <Box
-          sx={{
-            display: { xs: selectedChat ? "flex" : "none", md: "flex" },
-            alignItems: "center",
-            flexDirection: "column",
-            padding: theme.spacing(3),
-            backgroundColor: theme.palette.background.paper,
-            width: "100%",
-            [theme.breakpoints.up("md")]: {
-              width: "68%",
-            },
-            borderRadius: theme.shape.borderRadius,
-            borderWidth: "1px",
-            borderColor: theme.palette.grey[300],
-            borderStyle: "solid",
-            boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)",
-            "&:hover": {
-              boxShadow: "0px 6px 15px rgba(0, 0, 0, 0.2)",
-            },
-          }}
-          className="rounded-lg shadow-md p-4 bg-white"
-        >
-          <SingleChat fetchAgain={fetchAgain} setFetchAgain={setFetchAgain} />
-        </Box>
+        <SingleChat fetchAgain={fetchAgain} setFetchAgain={setFetchAgain} />
       ) : (
-        <Box
-          sx={{
-            margin: "auto",
-            display: { xs: selectedChat ? "flex" : "none", md: "flex" },
-            justifyContent: "center",
-            alignItems: "center",
-            height: "100%",
-            flexDirection: "column",
-          }}
-        >
-          <RotatingLogo />
-          <Typography
-            variant="h3"
-            align="center"
-            fontFamily="Work Sans"
-            sx={{
-              paddingBottom: 3,
-              fontWeight: 600,
-              color: "#333",
-            }}
-          >
-            No Chat Selected
+        <Box sx={{
+          flex: 1, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 1.5,
+          bgcolor: "background.default",
+        }}>
+          <Box sx={{
+            width: 56, height: 56, borderRadius: "14px",
+            bgcolor: "action.hover", border: "1px solid",
+            borderColor: "divider",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <ChatBubbleOutlineIcon sx={{ fontSize: 26, color: "text.disabled" }} />
+          </Box>
+          <Typography sx={{ fontSize: "0.9rem", fontWeight: 600, color: "text.secondary" }}>
+            No conversation selected
+          </Typography>
+          <Typography sx={{ fontSize: "0.8rem", color: "text.disabled", textAlign: "center", maxWidth: 240 }}>
+            Select a chat from the left or search for someone to message
           </Typography>
         </Box>
       )}
-    </>
+    </Box>
   );
 };
 

@@ -64,4 +64,23 @@ const sendMessage = asyncHandler(async (req, res) => {
   res.status(201).json(newMessage);
 });
 
-export { allMessages, sendMessage };
+const deleteMessage = asyncHandler(async (req, res) => {
+  const message = await Message.findById(req.params.messageId);
+  if (!message) throw new ExpressError(404, "Message not found");
+  if (message.sender.toString() !== req.user._id.toString())
+    throw new ExpressError(403, "You can only delete your own messages");
+  await Message.findByIdAndDelete(req.params.messageId);
+  res.status(200).json({ message: "Message deleted" });
+});
+
+const clearChat = asyncHandler(async (req, res) => {
+  const chat = await Chat.findById(req.params.chatId);
+  if (!chat) throw new ExpressError(404, "Chat not found");
+  if (!chat.users.includes(req.user._id))
+    throw new ExpressError(403, "Unauthorized");
+  await Message.deleteMany({ chat: req.params.chatId });
+  await Chat.findByIdAndUpdate(req.params.chatId, { latestMessage: null });
+  res.status(200).json({ message: "Chat cleared" });
+});
+
+export { allMessages, sendMessage, deleteMessage, clearChat };

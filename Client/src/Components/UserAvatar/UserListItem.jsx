@@ -2,42 +2,31 @@ import React from "react";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
 
 const UserListItem = ({ user, handleFunction }) => {
   return (
-    <Paper
+    <Box
       onClick={handleFunction}
-      elevation={3}
       sx={{
         cursor: "pointer",
-        background: "#E8E8E8",
-        "&:hover": {
-          background: "#38B2AC",
-          color: "white",
-        },
+        bgcolor: "action.hover",
+        "&:hover": { bgcolor: "action.selected" },
         width: "100%",
         display: "flex",
         alignItems: "center",
-        color: "black",
-        padding: "8px",
-        marginBottom: "8px",
-        borderRadius: "lg",
+        px: 2, py: 1,
+        mb: 1,
+        borderRadius: "8px",
+        border: "1px solid",
+        borderColor: "divider",
       }}
     >
-      <Avatar
-        sx={{ marginRight: "8px", width: "32px", height: "32px" }}
-        alt={user.name}
-        src={user.pic}
-      />
+      <Avatar sx={{ mr: 1.5, width: 32, height: 32 }} alt={user.name} src={user.pic} />
       <Box>
-        <Typography variant="body1">{user.name}</Typography>
-        <Typography variant="body2">
-          <b>Email: </b>
-          {user.email}
-        </Typography>
+        <Typography variant="body2" fontWeight={500} color="text.primary">{user.name}</Typography>
+        <Typography variant="caption" color="text.secondary">{user.email}</Typography>
       </Box>
-    </Paper>
+    </Box>
   );
 };
 

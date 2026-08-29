@@ -3,134 +3,140 @@ import { useSelector, useDispatch } from "react-redux";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import Typography from "@mui/material/Typography";
-import Input from "@mui/material/Input";
-import Button from "@mui/material/Button";
-import Backdrop from "@mui/material/Backdrop";
-import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import axios from "axios";
-import ChatLoading from "./ChatLoading";
-import UserListItem from "../UserAvatar/UserListItem";
-import { setChats, setSelectedChat } from "../../features/chat/chatSlice";
+import InputBase from "@mui/material/InputBase";
+import IconButton from "@mui/material/IconButton";
+import Avatar from "@mui/material/Avatar";
 import CircularProgress from "@mui/material/CircularProgress";
+import Divider from "@mui/material/Divider";
+import SearchIcon from "@mui/icons-material/Search";
+import CloseIcon from "@mui/icons-material/Close";
+import { toast } from "react-toastify";
+import axios from "axios";
+import { setChats, setSelectedChat } from "../../features/chat/chatSlice";
+
+const UserRow = ({ user, onClick, loading }) => (
+  <Box onClick={onClick} sx={{
+    display: "flex", alignItems: "center", gap: 1.5,
+    px: 2.5, py: 1.2, cursor: "pointer",
+    "&:hover": { bgcolor: "action.hover" },
+    opacity: loading ? 0.6 : 1,
+  }}>
+    <Avatar src={user.pic} sx={{ width: 38, height: 38, fontSize: "0.875rem", bgcolor: "secondary.main" }}>
+      {user.name?.[0]}
+    </Avatar>
+    <Box>
+      <Typography sx={{ fontSize: "0.875rem", fontWeight: 500, color: "text.primary" }}>{user.name}</Typography>
+      <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>{user.email}</Typography>
+    </Box>
+  </Box>
+);
+
 export default function CustomDrawer({ isOpen, onClose }) {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingChat, setLoadingChat] = useState(false);
-  const [searchResult, setSearchResult] = useState(null);
+  const [searchResult, setSearchResult] = useState([]);
   const user = useSelector((state) => state.chat.user);
   const chats = useSelector((state) => state.chat.chats);
   const dispatch = useDispatch();
 
-  const handleSearch = async () => {
-    if (!search) {
-      toast.warning("Please Enter Something In Search", {
-        autoClose: 4500,
-        position: "top-right",
+  const handleSearch = async (value) => {
+    setSearch(value);
+    if (!value.trim()) { setSearchResult([]); return; }
+    try {
+      setLoading(true);
+      const { data } = await axios.get(`/api/user?search=${value}`, {
+        headers: { Authorization: `Bearer ${user.token}` },
       });
-    } else {
-      try {
-        setLoading(true);
-
-        const config = {
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-          },
-        };
-
-        const { data } = await axios.get(`/api/user?search=${search}`, config);
-
-        setLoading(false);
-        setSearchResult(data);
-      } catch (error) {
-        toast.error("Failed to Search The Result", {
-          autoClose: 4400,
-          position: "bottom-left",
-        });
-      }
+      setSearchResult(data);
+    } catch {
+      toast.error("Search failed");
+    } finally {
+      setLoading(false);
     }
   };
 
   const accessChat = async (userId) => {
-    console.log(userId);
-    // console.log(user);
-
     try {
       setLoadingChat(true);
-      const config = {
-        headers: {
-          "Content-type": "application/json",
-          Authorization: `Bearer ${user.token}`,
-        },
-      };
-      const { data } = await axios.post(`/api/chat`, { userId }, config);
-      console.log(data);
+      const { data } = await axios.post("/api/chat", { userId }, {
+        headers: { "Content-type": "application/json", Authorization: `Bearer ${user.token}` },
+      });
       if (!chats.find((c) => c._id === data._id)) dispatch(setChats(data));
       dispatch(setSelectedChat(data));
       setLoadingChat(false);
       onClose();
-    } catch (error) {
-      toast.error("Error fetching the chat", {
-        description: error.message,
-        autoClose: 5000,
-        position: "bottom-left",
-      });
+      setSearch("");
+      setSearchResult([]);
+    } catch {
+      toast.error("Could not open chat");
+      setLoadingChat(false);
     }
   };
 
-  const handleBackdropClick = () => {
-    onClose();
-  };
-
   return (
-    <Drawer anchor="left" open={isOpen} onClose={onClose}>
-      <ToastContainer />
-      <Backdrop
-        open={isOpen}
-        sx={{ zIndex: (theme) => theme.zIndex.drawer - 1 }}
-        onClick={handleBackdropClick}
-      >
-        {/* Custom overlay styling */}
-      </Backdrop>
-      <Box
-        sx={{
-          width: 310,
-          zIndex: (theme) => theme.zIndex.drawer,
-          backgroundColor: "#fff",
-          boxShadow: "0 0 10px rgba(0, 0, 0, 0.2)",
-        }}
-      >
-        <Box
-          sx={{
-            borderBottomWidth: "1px",
-            padding: "1rem",
-          }}
-        >
-          <Typography variant="h6">Search Users</Typography>
+    <Drawer
+      anchor="left"
+      open={isOpen}
+      onClose={() => { onClose(); setSearch(""); setSearchResult([]); }}
+      PaperProps={{ sx: { width: 300, borderRadius: "0 10px 10px 0", border: "none", boxShadow: "4px 0 24px rgba(0,0,0,0.08)" } }}
+    >
+      {/* Header */}
+      <Box sx={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        px: 2.5, py: 1.8, bgcolor: "#0F172A",
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+      }}>
+        <Typography sx={{ fontSize: "0.9rem", fontWeight: 600, color: "white" }}>Find People</Typography>
+        <IconButton onClick={onClose} size="small" sx={{ color: "rgba(255,255,255,0.5)", "&:hover": { color: "white" } }}>
+          <CloseIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </Box>
+
+      {/* Search */}
+      <Box sx={{ px: 2, pt: 2, pb: 1.5 }}>
+        <Box sx={{
+          display: "flex", alignItems: "center", gap: 1,
+          bgcolor: "background.default", borderRadius: "8px", px: 1.5, py: 0.8,
+          border: "1px solid", borderColor: "divider",
+          "&:focus-within": { borderColor: "primary.main", bgcolor: "background.paper" },
+        }}>
+          <SearchIcon sx={{ color: "text.disabled", fontSize: 16 }} />
+          <InputBase
+            fullWidth placeholder="Search by name..."
+            value={search}
+            onChange={(e) => handleSearch(e.target.value)}
+            autoFocus
+            sx={{ fontSize: "0.875rem" }}
+          />
+          {loading && <CircularProgress size={14} sx={{ color: "primary.main" }} />}
         </Box>
-        <Box padding="1rem">
-          <Box display="flex" paddingBottom={2}>
-            <Input
-              placeholder="Search by name or email"
-              marginright={2}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <Button onClick={handleSearch}>Go</Button>
+      </Box>
+
+      <Divider sx={{ borderColor: "divider" }} />
+
+      {/* Results */}
+      <Box sx={{ flex: 1, overflowY: "auto" }}>
+        {!search && (
+          <Box px={2.5} py={4} textAlign="center">
+            <Typography sx={{ fontSize: "0.8rem", color: "text.disabled" }}>
+              Type a name to search
+            </Typography>
           </Box>
-          {loading ? (
-            <ChatLoading />
-          ) : (
-            searchResult?.map((user) => (
-              <UserListItem
-                key={user._id}
-                user={user}
-                handleFunction={() => accessChat(user._id)}
-              />
-            ))
-          )}
-          {loadingChat && <CircularProgress color="secondary" />}
-        </Box>
+        )}
+        {search && !loading && searchResult.length === 0 && (
+          <Box px={2.5} py={4} textAlign="center">
+            <Typography sx={{ fontSize: "0.8rem", color: "text.disabled" }}>No users found</Typography>
+          </Box>
+        )}
+        {searchResult.map((u) => (
+          <UserRow key={u._id} user={u} onClick={() => accessChat(u._id)} loading={loadingChat} />
+        ))}
+        {loadingChat && (
+          <Box display="flex" justifyContent="center" py={2}>
+            <CircularProgress size={20} sx={{ color: "primary.main" }} />
+          </Box>
+        )}
       </Box>
     </Drawer>
   );

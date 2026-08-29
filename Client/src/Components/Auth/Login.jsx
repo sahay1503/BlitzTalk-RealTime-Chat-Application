@@ -1,137 +1,105 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import { setUser } from "../../features/chat/chatSlice";
 import {
-  Button,
-  FormControl,
-  FormLabel,
-  Input,
-  InputAdornment,
-  IconButton,
+  Button, TextField, InputAdornment, IconButton, Box, Typography,
+  CircularProgress, Divider,
 } from "@mui/material";
-import { Visibility, VisibilityOff } from "@mui/icons-material";
-import { Box } from "@mui/system";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { Visibility, VisibilityOff, Email, Lock } from "@mui/icons-material";
+import { toast } from "react-toastify";
 
-const Login = () => {
+const Login = ({ onSwitchToSignup }) => {
   const [showPassword, setShowPassword] = useState(false);
-  const handleClickShowPassword = () => setShowPassword(!showPassword);
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const dispatch = useDispatch();
-  const user = useSelector((state) => state.chat.user);
+  const navigate = useNavigate();
 
   const submitHandler = async () => {
+    if (!email || !password) { toast.warning("Please fill all fields"); return; }
     setLoading(true);
-
-    if (!email || !password) {
-      toast.warning("Please Fill all the Fields", {
-        autoClose: 5000,
-        position: toast.POSITION ? toast.POSITION.BOTTOM_RIGHT : "bottom-right",
-      });
-      setLoading(false);
-      return;
-    }
-
     try {
-      const config = {
-        headers: {
-          "Content-type": "application/json",
-        },
-      };
-
-      const response = await axios.post(
-        "/api/user/login",
-        { email, password },
-        config
-      );
-      console.log("mera ", response.data);
-      if (response && response.data) {
-        toast.success("Login Successful", {
-          autoClose: 5000,
-          position: toast.POSITION
-            ? toast.POSITION.BOTTOM_RIGHT
-            : "bottom-right",
-        });
-        localStorage.setItem("userInfo", JSON.stringify(response.data));
-        dispatch(setUser(response.data));
-        setLoading(false);
-        console.log("user", user);
-        setTimeout(() => navigate("/chats"), 1000);
-      } else {
-        toast.error("Invalid response format", {
-          autoClose: 5000,
-          position: toast.POSITION
-            ? toast.POSITION.BOTTOM_RIGHT
-            : "bottom-right",
-        });
-        setLoading(false);
-      }
-    } catch (error) {
-      toast.error(`Error Occurred: ${error.response?.data?.message}`, {
-        autoClose: 5000,
-        position: toast.POSITION ? toast.POSITION.BOTTOM_RIGHT : "bottom-right",
+      const { data } = await axios.post("/api/user/login", { email, password }, {
+        headers: { "Content-type": "application/json" },
       });
+      toast.success("Welcome back!");
+      localStorage.setItem("userInfo", JSON.stringify(data));
+      dispatch(setUser(data));
+      setLoading(false);
+      setTimeout(() => navigate("/chats"), 800);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Login failed");
       setLoading(false);
     }
   };
 
   return (
-    <Box display="flex" flexDirection="column" gap={4} p={4}>
-      <ToastContainer />
-      <FormControl fullWidth required>
-        <FormLabel>Email Address</FormLabel>
-        <Input
-          value={email}
-          type="email"
-          placeholder="Enter Your Email Address"
-          onChange={(e) => setEmail(e.target.value)}
-          className="border p-2 rounded"
-        />
-      </FormControl>
-      <FormControl fullWidth required>
-        <FormLabel>Password</FormLabel>
-        <Input
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          type={showPassword ? "text" : "password"}
-          placeholder="Enter password"
-          endAdornment={
+    <Box display="flex" flexDirection="column" gap={3}>
+      <Box mb={1}>
+        <Typography variant="h5" fontWeight={700} color="text.primary" letterSpacing="-0.02em">
+          Sign in
+        </Typography>
+        <Typography variant="body2" color="text.secondary" mt={0.5}>
+          Enter your credentials to access your account
+        </Typography>
+      </Box>
+
+      <TextField
+        label="Email address"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        fullWidth
+        InputProps={{
+          startAdornment: <InputAdornment position="start"><Email sx={{ fontSize: 18, color: "text.disabled" }} /></InputAdornment>,
+        }}
+      />
+
+      <TextField
+        label="Password"
+        type={showPassword ? "text" : "password"}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        fullWidth
+        onKeyDown={(e) => e.key === "Enter" && submitHandler()}
+        InputProps={{
+          startAdornment: <InputAdornment position="start"><Lock sx={{ fontSize: 18, color: "text.disabled" }} /></InputAdornment>,
+          endAdornment: (
             <InputAdornment position="end">
-              <IconButton onClick={handleClickShowPassword}>
-                {showPassword ? <Visibility /> : <VisibilityOff />}
+              <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">
+                {showPassword ? <Visibility sx={{ fontSize: 18 }} /> : <VisibilityOff sx={{ fontSize: 18 }} />}
               </IconButton>
             </InputAdornment>
-          }
-          className="border p-2 rounded"
-        />
-      </FormControl>
+          ),
+        }}
+      />
+
       <Button
         variant="contained"
-        color="primary"
         size="large"
         onClick={submitHandler}
         disabled={loading}
-        className="bg-blue-500 text-white p-2 rounded mt-4"
+        fullWidth
+        sx={{ py: 1.4, fontWeight: 600, fontSize: "0.9rem" }}
       >
-        Login
+        {loading ? <CircularProgress size={20} color="inherit" /> : "Sign In"}
       </Button>
+
+      <Divider>
+        <Typography variant="caption" color="text.disabled">or</Typography>
+      </Divider>
+
       <Button
-        variant="contained"
-        color="error"
+        variant="outlined"
         size="large"
-        onClick={() => {
-          setEmail("guest@example.com");
-          setPassword("123456");
-        }}
-        className="bg-red-500 text-white p-2 rounded mt-4"
+        fullWidth
+        onClick={() => { setEmail("guest@example.com"); setPassword("123456"); }}
+        sx={{ py: 1.3, fontWeight: 500, color: "text.secondary", borderColor: "divider" }}
       >
-        Get Guest User Credentials
+        Continue as Guest
       </Button>
     </Box>
   );

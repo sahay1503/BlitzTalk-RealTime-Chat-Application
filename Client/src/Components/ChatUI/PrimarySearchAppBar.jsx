@@ -1,283 +1,192 @@
 import React, { useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { styled, alpha } from "@mui/material/styles";
 import AppBar from "@mui/material/AppBar";
-import { Drawer, Tooltip } from "@mui/material";
 import Box from "@mui/material/Box";
-import Avatar from "@mui/material/Avatar";
 import Toolbar from "@mui/material/Toolbar";
 import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
-import InputBase from "@mui/material/InputBase";
 import Badge from "@mui/material/Badge";
 import MenuItem from "@mui/material/MenuItem";
 import Menu from "@mui/material/Menu";
-import MenuIcon from "@mui/icons-material/Menu";
+import Avatar from "@mui/material/Avatar";
+import Tooltip from "@mui/material/Tooltip";
+import Divider from "@mui/material/Divider";
+import InputBase from "@mui/material/InputBase";
+import Popover from "@mui/material/Popover";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemText from "@mui/material/ListItemText";
+import ListItemAvatar from "@mui/material/ListItemAvatar";
 import SearchIcon from "@mui/icons-material/Search";
-import AccountCircle from "@mui/icons-material/AccountCircle";
-import MailIcon from "@mui/icons-material/Mail";
 import NotificationsIcon from "@mui/icons-material/Notifications";
-import MoreIcon from "@mui/icons-material/MoreVert";
+import LogoutIcon from "@mui/icons-material/Logout";
+import PersonIcon from "@mui/icons-material/Person";
+import ChatIcon from "@mui/icons-material/Chat";
+import { styled, alpha } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
-import { ToastContainer, toast } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import ProfileModal from "./ProfileModal";
 import CustomDrawer from "./CustomDrawer";
-import { setNotification, setUser } from "../../features/chat/chatSlice";
-const Search = styled("div")(({ theme }) => ({
-  position: "relative",
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: alpha(theme.palette.common.white, 0.15),
-  "&:hover": {
-    backgroundColor: alpha(theme.palette.common.white, 0.25),
-  },
-  marginRight: theme.spacing(2),
-  marginLeft: 0,
-  width: "100%",
-  [theme.breakpoints.up("sm")]: {
-    marginLeft: theme.spacing(3),
-    width: "auto",
-  },
-}));
+import { setNotification, setUser, setSelectedChat } from "../../features/chat/chatSlice";
+import { getSender } from "../../Helpers/chatHelpers";
 
-const SearchIconWrapper = styled("div")(({ theme }) => ({
-  padding: theme.spacing(0, 2),
-  height: "100%",
-  position: "absolute",
-  pointerEvents: "none",
+const SearchWrapper = styled("div")(({ theme }) => ({
+  position: "relative",
+  borderRadius: 10,
+  backgroundColor: "rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255,255,255,0.1)",
+  "&:hover": { backgroundColor: "rgba(255,255,255,0.12)" },
+  cursor: "pointer",
   display: "flex",
   alignItems: "center",
-  justifyContent: "center",
+  padding: "6px 14px",
+  gap: 8,
+  minWidth: 200,
 }));
-
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: "inherit",
-  "& .MuiInputBase-input": {
-    padding: theme.spacing(1, 1, 1, 0),
-    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
-    transition: theme.transitions.create("width"),
-    width: "100%",
-    [theme.breakpoints.up("md")]: {
-      width: "20ch",
-    },
-  },
-}));
-
-let badgeContent = 0;
 
 export default function PrimarySearchAppBar() {
   const dispatch = useDispatch();
-  const notifications = useSelector((state) => state.chat.notification);
-  const [isDrawerOpen, setDrawerOpen] = useState(false);
-
-  const handleDrawerOpen = () => {
-    setDrawerOpen(true);
-  };
-
-  const handleDrawerClose = () => {
-    setDrawerOpen(false);
-  };
   const navigate = useNavigate();
+  const user = useSelector((state) => state.chat.user);
+  const notifications = useSelector((state) => state.chat.notification);
+
+  const [isDrawerOpen, setDrawerOpen] = useState(false);
+  const [anchorElUser, setAnchorElUser] = useState(null);
+  const [notifAnchor, setNotifAnchor] = useState(null);
 
   const logoutHandler = () => {
     localStorage.removeItem("userInfo");
-    setAnchorElUser(null);
-    setAnchorEl(null);
-    handleMobileMenuClose();
-    navigate("/");
     dispatch(setUser(null));
-  };
-  const settings = ["Profile", "Logout"];
-  const [anchorEl, setAnchorEl] = React.useState(null);
-  const [anchorElUser, setAnchorElUser] = React.useState(null);
-  const user = useSelector((state) => state.chat.user);
-
-  const isMenuOpen = Boolean(anchorEl);
-
-  const handleProfileMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-  const handleOpenUserMenu = (event) => {
-    setAnchorElUser(event.currentTarget);
-  };
-  const handleCloseUserMenu = () => {
     setAnchorElUser(null);
+    navigate("/");
   };
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    handleMobileMenuClose();
+  const handleNotifClick = (notif) => {
+    dispatch(setSelectedChat(notif.chat));
+    dispatch(setNotification(notifications.filter((n) => n !== notif)));
+    setNotifAnchor(null);
   };
-
-  const menuId = "primary-search-account-menu";
-  const renderMenu = (
-    <Menu
-      anchorEl={anchorEl}
-      anchorOrigin={{
-        vertical: "top",
-        horizontal: "right",
-      }}
-      id={menuId}
-      keepMounted
-      transformOrigin={{
-        vertical: "top",
-        horizontal: "right",
-      }}
-      open={isMenuOpen}
-      onClose={handleMenuClose}
-    >
-      <ProfileModal user={user}>
-        <MenuItem onClick={handleMenuClose}>View Profile</MenuItem>
-      </ProfileModal>
-      <MenuItem onClick={logoutHandler}>Logout</MenuItem>
-    </Menu>
-  );
-
-  const [mobileMoreAnchorEl, setMobileMoreAnchorEl] = React.useState(null);
-  const isMobileMenuOpen = Boolean(mobileMoreAnchorEl);
-  const handleMobileMenuClose = () => {
-    setMobileMoreAnchorEl(null);
-  };
-
-  const handleMobileMenuOpen = (event) => {
-    setMobileMoreAnchorEl(event.currentTarget);
-  };
-  const mobileMenuId = "primary-search-account-menu-mobile";
-  const renderMobileMenu = (
-    <Menu
-      anchorEl={mobileMoreAnchorEl}
-      anchorOrigin={{
-        vertical: "top",
-        horizontal: "right",
-      }}
-      id={mobileMenuId}
-      keepMounted
-      transformOrigin={{
-        vertical: "top",
-        horizontal: "right",
-      }}
-      open={isMobileMenuOpen}
-      onClose={handleMobileMenuClose}
-    >
-      <MenuItem>
-        <IconButton
-          size="large"
-          aria-label="show 17 new notifications"
-          color="inherit"
-        >
-          <Badge
-            badgeContent={notifications.length ? notifications.length : 0}
-            color="error"
-          >
-            <NotificationsIcon />
-          </Badge>
-        </IconButton>
-        <p>Notifications</p>
-      </MenuItem>
-      <MenuItem onClick={handleProfileMenuOpen}>
-        <IconButton
-          size="large"
-          aria-label="account of current user"
-          aria-controls="primary-search-account-menu"
-          aria-haspopup="true"
-          color="inherit"
-        >
-          <AccountCircle />
-        </IconButton>
-        <p>Profile</p>
-      </MenuItem>
-    </Menu>
-  );
 
   return (
     <>
-      <Box sx={{ flexGrow: 1 }}>
-        <AppBar position="static" color="warning">
-          <Toolbar>
-            <Search>
-              <SearchIconWrapper>
-                <SearchIcon />
-              </SearchIconWrapper>
-              <StyledInputBase
-                onClick={handleDrawerOpen}
-                placeholder="Search…"
-                inputProps={{ "aria-label": "search" }}
-              />
-            </Search>
-            <Typography
-              variant="h5"
-              noWrap
-              component="div"
-              sx={{ display: { xs: "none", sm: "block" }, marginLeft: "17em" }}
-            >
+      <AppBar
+        position="static"
+        elevation={0}
+        sx={{
+          background: "linear-gradient(135deg, #1A1A2E 0%, #16213E 100%)",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+        }}
+      >
+        <Toolbar sx={{ gap: 2, px: { xs: 2, md: 3 } }}>
+          {/* Brand */}
+          <Box display="flex" alignItems="center" gap={1} mr={2}>
+            <Box sx={{
+              width: 32, height: 32, borderRadius: "8px",
+              background: "linear-gradient(135deg, #6C63FF, #9B59B6)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <ChatIcon sx={{ color: "white", fontSize: 18 }} />
+            </Box>
+            <Typography variant="h6" fontWeight={700} color="white" sx={{ display: { xs: "none", sm: "block" } }}>
               BlitzTalk
             </Typography>
-            <Box sx={{ flexGrow: 1 }} />
-            <Box sx={{ display: { xs: "none", md: "flex" } }}>
-              <IconButton
-                size="large"
-                aria-label="show 17 new notifications"
-                color="inherit"
-                sx={{ marginRight: "1em" }}
-              >
-                <Badge
-                  badgeContent={notifications ? notifications.length : 0}
-                  color="error"
-                >
-                  <NotificationsIcon />
-                </Badge>
-              </IconButton>
-              <Box sx={{ flexGrow: 0 }}>
-                <Tooltip title="Open settings">
-                  <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
-                    <Avatar alt={user.name} src={user.pic} />
-                  </IconButton>
-                </Tooltip>
-                <Menu
-                  sx={{ mt: "45px" }}
-                  id="menu-appbar"
-                  anchorEl={anchorElUser}
-                  anchorOrigin={{
-                    vertical: "top",
-                    horizontal: "right",
-                  }}
-                  keepMounted
-                  transformOrigin={{
-                    vertical: "top",
-                    horizontal: "right",
-                  }}
-                  open={Boolean(anchorElUser)}
-                  onClose={handleCloseUserMenu}
-                >
-                  <ProfileModal user={user}>
-                    <MenuItem onClick={handleCloseUserMenu}>
-                      <Typography textAlign="center">{settings[0]}</Typography>
-                    </MenuItem>
-                  </ProfileModal>
-                  <MenuItem onClick={logoutHandler}>
-                    <Typography textAlign="center">{settings[1]}</Typography>
-                  </MenuItem>
-                </Menu>
-              </Box>
-            </Box>
-            <Box sx={{ display: { xs: "flex", md: "none" } }}>
-              <IconButton
-                size="large"
-                aria-label="show more"
-                aria-controls={mobileMenuId}
-                aria-haspopup="true"
-                onClick={handleMobileMenuOpen}
-                color="inherit"
-              >
-                <MoreIcon />
-              </IconButton>
-            </Box>
-          </Toolbar>
-        </AppBar>
-        {renderMobileMenu}
-        {renderMenu}
-      </Box>
-      <CustomDrawer isOpen={isDrawerOpen} onClose={handleDrawerClose} />
+          </Box>
+
+          {/* Search trigger */}
+          <SearchWrapper onClick={() => setDrawerOpen(true)}>
+            <SearchIcon sx={{ color: "rgba(255,255,255,0.4)", fontSize: 18 }} />
+            <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.4)" }}>
+              Search people...
+            </Typography>
+          </SearchWrapper>
+
+          <Box flex={1} />
+
+          {/* Notifications */}
+          <Tooltip title="Notifications">
+            <IconButton onClick={(e) => setNotifAnchor(e.currentTarget)} sx={{ color: "rgba(255,255,255,0.7)" }}>
+              <Badge badgeContent={notifications?.length || 0} color="error">
+                <NotificationsIcon />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+
+          {/* Avatar menu */}
+          <Tooltip title={user?.name}>
+            <IconButton onClick={(e) => setAnchorElUser(e.currentTarget)} sx={{ p: 0.5 }}>
+              <Avatar
+                alt={user?.name}
+                src={user?.pic}
+                sx={{ width: 36, height: 36, border: "2px solid rgba(108,99,255,0.6)" }}
+              />
+            </IconButton>
+          </Tooltip>
+        </Toolbar>
+      </AppBar>
+
+      {/* Notification popover */}
+      <Popover
+        open={Boolean(notifAnchor)}
+        anchorEl={notifAnchor}
+        onClose={() => setNotifAnchor(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        PaperProps={{ sx: { width: 320, borderRadius: 3, mt: 1, boxShadow: "0 10px 40px rgba(0,0,0,0.2)" } }}
+      >
+        <Box px={2} py={1.5} borderBottom="1px solid #f0f0f0">
+          <Typography fontWeight={600} variant="body1">Notifications</Typography>
+        </Box>
+        {!notifications?.length ? (
+          <Box px={2} py={3} textAlign="center">
+            <Typography variant="body2" color="text.secondary">No new notifications</Typography>
+          </Box>
+        ) : (
+          <List dense>
+            {notifications.map((n, i) => (
+              <ListItem key={i} button onClick={() => handleNotifClick(n)}
+                sx={{ "&:hover": { bgcolor: "rgba(108,99,255,0.06)" } }}>
+                <ListItemAvatar>
+                  <Avatar src={n.sender?.pic} sx={{ width: 36, height: 36 }}>{n.sender?.name?.[0]}</Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={<Typography variant="body2" fontWeight={600}>{n.sender?.name}</Typography>}
+                  secondary={<Typography variant="caption" color="text.secondary" noWrap>{n.content}</Typography>}
+                />
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </Popover>
+
+      {/* User menu */}
+      <Menu
+        anchorEl={anchorElUser}
+        open={Boolean(anchorElUser)}
+        onClose={() => setAnchorElUser(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        PaperProps={{ sx: { borderRadius: 3, mt: 1, minWidth: 180, boxShadow: "0 10px 40px rgba(0,0,0,0.15)" } }}
+      >
+        <Box px={2} py={1.5}>
+          <Typography fontWeight={600} variant="body2">{user?.name}</Typography>
+          <Typography variant="caption" color="text.secondary">{user?.email}</Typography>
+        </Box>
+        <Divider />
+        <ProfileModal user={user}>
+          <MenuItem sx={{ gap: 1.5, py: 1.2 }}>
+            <PersonIcon fontSize="small" sx={{ color: "text.secondary" }} />
+            <Typography variant="body2">View Profile</Typography>
+          </MenuItem>
+        </ProfileModal>
+        <MenuItem onClick={logoutHandler} sx={{ gap: 1.5, py: 1.2, color: "error.main" }}>
+          <LogoutIcon fontSize="small" />
+          <Typography variant="body2">Logout</Typography>
+        </MenuItem>
+      </Menu>
+
+      <CustomDrawer isOpen={isDrawerOpen} onClose={() => setDrawerOpen(false)} />
+      <ToastContainer theme="dark" position="bottom-right" />
     </>
   );
 }

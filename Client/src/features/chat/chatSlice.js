@@ -6,14 +6,9 @@ export const fetchChats = createAsyncThunk(
   async (_, { getState, rejectWithValue }) => {
     try {
       const { user } = getState().chat;
-      const config = {
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
-      };
-
-      const response = await axios.get("/api/chat", config);
-      console.log(response.data);
+      const response = await axios.get("/api/chat", {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
       return response.data;
     } catch (error) {
       return rejectWithValue("Failed to fetch chats");
@@ -27,6 +22,9 @@ const initialState = {
   notification: [],
   chats: [],
   emotion: "",
+  onlineUsers: [],
+  unreadCounts: {},
+  darkMode: false,
 };
 
 export const chatSlice = createSlice({
@@ -34,47 +32,57 @@ export const chatSlice = createSlice({
   initialState,
   reducers: {
     setSelectedChat: (state, action) => {
-      state.selectedChat = action.payload;
+      const chat = action.payload;
+      state.selectedChat = chat;
+      // Clear unread count when chat is opened
+      if (chat?._id) {
+        state.unreadCounts[chat._id] = 0;
+      }
     },
     setUser: (state, action) => {
-      const userInfo = action.payload;
-
-      state.user = userInfo;
-      localStorage.setItem("userInfo", JSON.stringify(userInfo));
+      state.user = action.payload;
+      localStorage.setItem("userInfo", JSON.stringify(action.payload));
     },
     setNotification: (state, action) => {
-      state.notification = [action.payload, ...state.notification];
+      // If array passed (for filtering), replace; if single item, prepend
+      if (Array.isArray(action.payload)) {
+        state.notification = action.payload;
+      } else {
+        state.notification = [action.payload, ...state.notification];
+      }
     },
-
     setChats: (state, action) => {
-      state.chats = [...state.chats, action.payload];
+      // Deduplicate — don't add if already exists
+      const exists = state.chats.find((c) => c._id === action.payload._id);
+      if (!exists) {
+        state.chats = [action.payload, ...state.chats];
+      }
     },
     setEmotion: (state, action) => {
       state.emotion = action.payload;
     },
+    setOnlineUsers: (state, action) => {
+      state.onlineUsers = action.payload;
+    },
+    incrementUnread: (state, action) => {
+      const chatId = action.payload;
+      state.unreadCounts[chatId] = (state.unreadCounts[chatId] || 0) + 1;
+    },
+    toggleDarkMode: (state) => {
+      state.darkMode = !state.darkMode;
+    },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchChats.pending, (state, action) => {
-        state.chats = [];
-      })
-      .addCase(fetchChats.rejected, (state, action) => {
-        state.chats = [];
-      })
-      .addCase(fetchChats.fulfilled, (state, action) => {
-        state.chats = action.payload;
-      });
+      .addCase(fetchChats.pending, (state) => { state.chats = []; })
+      .addCase(fetchChats.rejected, (state) => { state.chats = []; })
+      .addCase(fetchChats.fulfilled, (state, action) => { state.chats = action.payload; });
   },
 });
 
-// Export the generated actions
 export const {
-  setSelectedChat,
-  setUser,
-  setNotification,
-  setChats,
-  setEmotion,
+  setSelectedChat, setUser, setNotification, setChats,
+  setEmotion, setOnlineUsers, incrementUnread, toggleDarkMode,
 } = chatSlice.actions;
 
-// Export the reducer
 export default chatSlice.reducer;

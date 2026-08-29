@@ -1,46 +1,27 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
-import { setUser } from "../features/chat/chatSlice.js";
+import { useState } from "react";
+import { useSelector } from "react-redux";
 import { Box } from "@mui/material";
-import {
-  SideSearchPanel,
-  PrimarySearchAppBar,
-  MyChat,
-  ChatBox,
-} from "../Components";
+import { MyChat, ChatBox } from "../Components";
 
 const Chat = () => {
   const [fetchAgain, setFetchAgain] = useState(false);
-
   const user = useSelector((state) => state.chat.user);
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
 
-  // useEffect(() => {
-  //   dispatch(setUser({ id: 1, name: "John Doe" }));
-  //   navigate("/");
-  // }, [dispatch, navigate]);
-
-  const renderChatComponents = () => (
-    <>
-      <MyChat fetchAgain={fetchAgain} />
-      <ChatBox fetchAgain={fetchAgain} setFetchAgain={setFetchAgain} />
-    </>
-  );
+  if (!user) return null;
 
   return (
-    <Box width="100%">
-      {user ? <PrimarySearchAppBar /> : <span>error</span>}
-      <Box
-        display="flex"
-        justifyContent="space-between"
-        width="100%"
-        height="91.5vh"
-        padding="10px"
-      >
-        {user && renderChatComponents()}
-      </Box>
+    <Box sx={{
+      display: "flex",
+      flex: 1,
+      alignItems: "stretch",
+      gap: 1.5,
+      p: 1.5,
+      bgcolor: "background.default",
+      minHeight: 0,
+      overflow: "hidden",
+    }}>
+      <MyChat fetchAgain={fetchAgain} />
+      <ChatBox fetchAgain={fetchAgain} setFetchAgain={setFetchAgain} />
     </Box>
   );
 };

@@ -1,55 +1,34 @@
-import { ArrowBack } from "@mui/icons-material";
-import CurrencyRupeeIcon from "@mui/icons-material/CurrencyRupee";
-import compromise from "compromise";
-import { SentimentIntensityAnalyzer } from "vader-sentiment";
-import { useEffect, useState } from "react";
+import { ArrowBack, Send, EmojiEmotions, Translate, ClearAll } from "@mui/icons-material";
+import EmojiPickerReact from "emoji-picker-react";
+import { useEffect, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { ToastContainer, toast } from "react-toastify";
-import Stack from "@mui/material/Stack";
-import "react-toastify/dist/ReactToastify.css";
+import { toast } from "react-toastify";
+import { setSelectedChat, setEmotion } from "../../features/chat/chatSlice";
 import {
-  setSelectedChat,
-  setNotification,
-  setEmotion,
-} from "../../features/chat/chatSlice";
-import {
-  IconButton,
-  Typography,
-  TextField,
-  FormControl,
-  Input,
-  Box,
-  CircularProgress,
+  IconButton, Typography, Box, CircularProgress, Avatar,
+  InputBase, Tooltip, ClickAwayListener,
+  Dialog, DialogTitle, DialogContent, DialogContentText,
+  DialogActions, Button, Menu, MenuItem,
 } from "@mui/material";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import GroupsIcon from "@mui/icons-material/Groups";
 import { getSender, getSenderFull } from "../../Helpers/chatHelpers";
 import { detectEmotion } from "../../Helpers/detectEmotion";
 import ProfileModal from "./ProfileModal";
-import AmountInput from "../Payment/AmountInput";
 import UpdateGroupChatModal from "./GroupUI/UpdateGroupChatModal";
 import ScrollableFeed from "./ScrollableFeed";
-import EmoteSwitch from "./EmoteSwitch";
-import TranslateSwitch from "./TranslateSwitch";
 import Lottie from "react-lottie";
 import typingOptions from "../../json/typing.json";
 import { countries } from "../../json/countries";
 import axios from "axios";
-import io from "socket.io-client";
-const ENDPOINT = "http://localhost:8080";
-let socket, selectedChatCompare, typingTimeout;
-const TYPING_TIMEOUT = 1700;
+import { getSocket } from "../../hooks/useSocket";
+
 const defaultOptions = {
-  loop: true,
-  autoplay: true,
-  animationData: typingOptions,
-
-  rendererSettings: {
-    preserveAspectRatio: "xMidYMid slice",
-  },
+  loop: true, autoplay: true, animationData: typingOptions,
+  rendererSettings: { preserveAspectRatio: "xMidYMid slice" },
 };
 
-const getLanguageCode = (languageName) => {
-  return countries[languageName] || null;
-};
+const getLanguageCode = (name) => countries[name] || null;
 
 const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const [isEmoteOn, setIsEmoteOn] = useState(false);
@@ -60,381 +39,397 @@ const SingleChat = ({ fetchAgain, setFetchAgain }) => {
   const [socketConnected, setSocketConnected] = useState(false);
   const [typing, setTyping] = useState(false);
   const [istyping, setIsTyping] = useState(false);
-  const [showAmountInput, setShowAmountInput] = useState(false);
-  const analyzer = new SentimentIntensityAnalyzer();
-  const { user, selectedChat, notification, emotion } = useSelector(
-    (state) => state.chat
-  );
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, type: null, messageId: null });
+
+  const { user, selectedChat, emotion, onlineUsers } = useSelector((state) => state.chat);
   const dispatch = useDispatch();
-  const nlp = compromise;
+  const selectedChatRef = useRef(selectedChat);
+  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
+
+  const closeConfirm = () => setConfirmDialog({ open: false, type: null, messageId: null });
 
   useEffect(() => {
-    socket = io(ENDPOINT);
-    socket.emit("setup", user);
+    const socket = getSocket();
+    if (!socket) return;
     socket.on("connected", () => setSocketConnected(true));
     socket.on("typing", () => setIsTyping(true));
     socket.on("stop typing", () => setIsTyping(false));
+    const handleLocalMessage = (newMsg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === newMsg._id)) return prev;
+        return [...prev, newMsg];
+      });
+    };
+    socket.on("__local_message", handleLocalMessage);
+    return () => {
+      socket.off("__local_message", handleLocalMessage);
+      socket.off("connected");
+      socket.off("typing");
+      socket.off("stop typing");
+    };
   }, []);
+
   const fetchMessages = async () => {
     if (!selectedChat) return;
-
     try {
-      const config = {
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
-      };
-
       setLoading(true);
-
-      const { data } = await axios.get(
-        `/api/message/${selectedChat._id}`,
-        config
-      );
-      // console.dir(data);
+      const { data } = await axios.get(`/api/message/${selectedChat._id}`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
       setMessages(data);
       setLoading(false);
-
-      socket.emit("join chat", selectedChat._id);
-    } catch (error) {
-      toast("Failed to fetch messages", {
-        autoClose: 3000,
-        type: "error",
-        position: "top-right",
-      });
+      getSocket()?.emit("join chat", selectedChat._id);
+    } catch {
+      toast.error("Failed to fetch messages");
+      setLoading(false);
     }
   };
 
-  const sendMessage = async (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (newMessage.trim() === "") return;
-      socket.emit("stop typing", selectedChat._id);
+  const sendMessage = async () => {
+    if (!newMessage.trim()) return;
+    const socket = getSocket();
+    socket?.emit("stop typing", selectedChat._id);
+    setShowEmojiPicker(false);
 
-      const senderLanguage = user.language || "English";
-      const senderEmail = user.email;
-      let translatedMessage = newMessage;
+    const senderLanguage = user.language || "English";
+    let messageContent = newMessage;
 
-      if (selectedChat.users && selectedChat.users.length === 2) {
-        const receiver = selectedChat.users.find(
-          (user) =>
-            user.email !== senderEmail && user.language !== senderLanguage
-        );
-
-        if (receiver && isTranslateOn) {
-          const receiverLanguage = receiver.language;
-          const translateFromCode = getLanguageCode(senderLanguage);
-          const translateToCode = getLanguageCode(receiverLanguage);
-          // console.log("translateFromCode", translateFromCode);
-          // console.log("translateToCode", translateToCode);
-          // console.log("receiverLanguage", receiverLanguage);
-          // console.log("senderLanguage", senderLanguage);
-          if (!translateFromCode || !translateToCode) {
-            console.log("Error: Language codes not found for translation.");
-            return;
-          }
-
-          const apiUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
-            newMessage
-          )}&langpair=${translateFromCode}|${translateToCode}`;
-
+    if (isTranslateOn && selectedChat.users?.length === 2) {
+      const receiver = selectedChat.users.find((u) => u.email !== user.email && u.language !== senderLanguage);
+      if (receiver) {
+        const from = getLanguageCode(senderLanguage);
+        const to = getLanguageCode(receiver.language);
+        if (from && to) {
           try {
-            const response = await axios.get(apiUrl);
-            if (
-              response.data &&
-              response.data.responseData &&
-              response.data.responseData.translatedText
-            ) {
-              translatedMessage = response.data.responseData.translatedText;
-            } else {
-              console.log("Translation API response is missing required data.");
-            }
-          } catch (error) {
-            console.log("Error occurred while translating:", error.message);
-            // Handle translation error gracefully, fallback to original message
-            translatedMessage = newMessage;
-          }
-        } else {
-          console.log("No suitable receiver found.");
+            const { data } = await axios.get(
+              `https://api.mymemory.translated.net/get?q=${encodeURIComponent(newMessage)}&langpair=${from}|${to}`
+            );
+            if (data?.responseData?.translatedText) messageContent = data.responseData.translatedText;
+          } catch { /* fallback */ }
         }
       }
-
-      // console.log("translatedMessage", translatedMessage);
-      // console.log("newMessage", newMessage);
-
-      let messageContent = translatedMessage;
-      let emoji = "";
-      const detectedEmotion = detectEmotion(newMessage);
-
-      switch (detectedEmotion || emotion) {
-        case "hello":
-          emoji = "🙏";
-          break;
-        case "bye":
-          emoji = "👋🏼";
-          break;
-        case "excited":
-          emoji = "🤩";
-          break;
-        case "ashamed":
-          emoji = "😳";
-          break;
-        case "calm":
-          emoji = "😌";
-          break;
-        case "joy":
-          emoji = "😂";
-          break;
-        case "love":
-          emoji = "❤️";
-          break;
-        case "sad":
-          emoji = "😔";
-          break;
-        case "irritated":
-          emoji = "😠";
-          break;
-        case "angry":
-          emoji = "😡";
-          break;
-        case "bored":
-          emoji = "😒";
-          break;
-        case "curious":
-          emoji = "🤔";
-          break;
-        case "blank":
-          emoji = "❓";
-          break;
-        default:
-          emoji = "";
-      }
-
-      if (emoji && isEmoteOn) {
-        // Attach emoji to message content
-        messageContent += ` ${emoji}`;
-      }
-
-      const message = {
-        content: messageContent,
-        chatId: selectedChat._id,
-      };
-
-      try {
-        const config = {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
-          },
-        };
-
-        const res = await axios.post("/api/message", message, config);
-        socket.emit("new message", res.data);
-        setMessages([...messages, res.data]);
-        setNewMessage("");
-      } catch (err) {
-        toast.error(err.response.data.message);
-        console.log(err);
-      }
     }
+
+    if (isEmoteOn) {
+      const emojiMap = {
+        hello: "🙏", bye: "👋🏼", excited: "🤩", ashamed: "😳", calm: "😌",
+        joy: "😂", love: "❤️", sad: "😔", irritated: "😠", angry: "😡",
+        bored: "😒", curious: "🤔", blank: "❓",
+      };
+      const emoji = emojiMap[detectEmotion(newMessage) || emotion];
+      if (emoji) messageContent += ` ${emoji}`;
+    }
+
+    try {
+      const res = await axios.post("/api/message", { content: messageContent, chatId: selectedChat._id }, {
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${user.token}` },
+      });
+      socket?.emit("new message", res.data);
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === res.data._id)) return prev;
+        return [...prev, res.data];
+      });
+      setNewMessage("");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to send");
+    }
+  };
+
+  const deleteMessage = async (messageId) => {
+    try {
+      await axios.delete(`/api/message/${messageId}`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      setMessages((prev) => prev.filter((m) => m._id !== messageId));
+      toast.success("Message deleted");
+    } catch {
+      toast.error("Failed to delete message");
+    }
+    closeConfirm();
+  };
+
+  const clearChat = async () => {
+    try {
+      await axios.delete(`/api/message/clear/${selectedChat._id}`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      setMessages([]);
+      toast.success("Chat cleared");
+    } catch {
+      toast.error("Failed to clear chat");
+    }
+    closeConfirm();
+    setMenuAnchor(null);
   };
 
   const typingHandler = (e) => {
     setNewMessage(e.target.value);
-
-    if (!socketConnected) return;
-
+    const socket = getSocket();
+    if (!socketConnected || !socket) return;
     if (!typing) {
       setTyping(true);
       socket.emit("typing", selectedChat._id);
     }
-    let lastTypingTime = new Date().getTime();
-    var timerLength = 3000;
+    const lastTypingTime = new Date().getTime();
     setTimeout(() => {
-      var timeNow = new Date().getTime();
-      var timeDiff = timeNow - lastTypingTime;
-      if (timeDiff >= timerLength && typing) {
+      if (new Date().getTime() - lastTypingTime >= 3000 && typing) {
         socket.emit("stop typing", selectedChat._id);
         setTyping(false);
-        // setMessages([...messages, emotion]);
       }
-    }, timerLength);
+    }, 3000);
   };
 
-  useEffect(() => {
-    fetchMessages();
-    selectedChatCompare = selectedChat;
-  }, [selectedChat]);
+  useEffect(() => { fetchMessages(); }, [selectedChat]);
 
-  useEffect(() => {
-    if (!socket) return;
-    // console.log("socket", socket);
-    socket.on(
-      "message recieved",
-      (newMessage) => {
-        // setEmotion((prevEmotion) => newMessage.answer);
-        console.log("backendEmotion", newMessage.answer);
-        dispatch(setEmotion(newMessage.answer));
-        if (
-          !selectedChatCompare ||
-          selectedChatCompare._id !== newMessage.chat._id
-        ) {
-          if (!notification.includes(newMessage)) {
-            console.log("some", newMessage);
-            dispatch(setNotification(newMessage));
-            setFetchAgain(!fetchAgain);
-          }
-        } else {
-          setMessages((prevMessages) => [...prevMessages, newMessage]);
-        }
-      },
-      [fetchAgain, setFetchAgain]
-    );
+  const isGroup = selectedChat?.isGroupChat;
+  const senderFull = !isGroup && selectedChat && getSenderFull(user, selectedChat.users);
+  const chatName = isGroup ? selectedChat?.chatName : getSender(user, selectedChat?.users || []);
+  const isOnline = !isGroup && senderFull && onlineUsers.includes(senderFull._id);
 
-    // Cleanup function
-    return () => {
-      socket.off("message recieved");
-    };
-  });
-
-  const handleCurrencyIconClick = () => {
-    setShowAmountInput(true);
-  };
   return (
-    <>
-      {selectedChat && (
-        <div className="w-full h-[92%] -mt-3.5">
-          <Typography
-            sx={{
-              fontFamily: "Work sans",
-              fontSize: { xs: "28px", md: "30px" },
-              paddingBottom: 3,
-              paddingX: 2,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: { xs: "space-between" },
-            }}
-          >
-            <IconButton
-              sx={{
-                display: { xs: "flex", md: "none" },
-              }}
-              onClick={() => dispatch(setSelectedChat(""))}
-            >
-              <ArrowBack />
-            </IconButton>
-            {!selectedChat.isGroupChat ? (
-              <>
-                <Stack direction="row" spacing={0} style={{ marginLeft: -21 }}>
-                  <EmoteSwitch
-                    label="Emote"
-                    onClick={(e) => {
-                      console.log("Emote switch clicked");
-                      setIsEmoteOn(!isEmoteOn);
-                    }}
-                    style={{ marginLeft: 5 }}
-                  />
-                  <TranslateSwitch
-                    label="Translate"
-                    onClick={(e) => {
-                      console.log("Translate switch clicked");
-                      setIsTranslateOn(!isTranslateOn);
-                    }}
-                    style={{ marginLeft: 5 }}
-                  />
-                </Stack>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
 
-                {getSender(user, selectedChat.users)}
-                <ProfileModal user={getSenderFull(user, selectedChat.users)} />
-              </>
-            ) : (
-              <>
-                {/* <IconButton
-                sx={{
-                  backgroundColor: "#c9e7c9",
-                  "&:hover": {
-                    backgroundColor: "#a1d7a1",
-                    transform: "scale(1.05)",
-                  },
-                  "&:focus": {
-                    backgroundColor: "#a1d7a1",
-                    boxShadow: "0 0 0 0.2rem rgba(0,123,255,.5)",
-                  },
-                }}
-                onClick={handleCurrencyIconClick}
-              >
-                <CurrencyRupeeIcon style={{ fontSize: 20 }} />
-              </IconButton> */}
-                {selectedChat.chatName.toUpperCase()}
-                <UpdateGroupChatModal
-                  fetchAgain={fetchAgain}
-                  setFetchAgain={setFetchAgain}
-                  fetchMessages={fetchMessages}
-                />
-              </>
-            )}
+      {/* ── Header ── */}
+      <Box sx={{
+        display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0,
+        px: 2, py: 1.2, borderBottom: "1px solid", borderColor: "divider", bgcolor: "background.paper",
+      }}>
+        <IconButton size="small" sx={{ display: { xs: "flex", md: "none" }, color: "text.secondary" }}
+          onClick={() => dispatch(setSelectedChat(""))}>
+          <ArrowBack sx={{ fontSize: 18 }} />
+        </IconButton>
+
+        {/* Avatar */}
+        <Box sx={{ position: "relative", flexShrink: 0 }}>
+          {isGroup ? (
+            <Box sx={{
+              width: 38, height: 38, borderRadius: "9px",
+              bgcolor: "primary.main",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <GroupsIcon sx={{ color: "white", fontSize: 18 }} />
+            </Box>
+          ) : (
+            <Avatar src={senderFull?.pic} sx={{ width: 38, height: 38, fontSize: "0.875rem", bgcolor: "secondary.main" }}>
+              {chatName?.[0]?.toUpperCase()}
+            </Avatar>
+          )}
+          {isOnline && (
+            <Box sx={{
+              position: "absolute", bottom: 0, right: 0,
+              width: 10, height: 10, borderRadius: "50%",
+              bgcolor: "success.main", border: "2px solid",
+              borderColor: "background.paper",
+            }} />
+          )}
+        </Box>
+
+        {/* Name + status */}
+        <Box flex={1} minWidth={0}>
+          <Typography sx={{ fontSize: "0.875rem", fontWeight: 600, color: "#0F172A" }} noWrap>
+            {chatName}
           </Typography>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "flex-end",
-              width: "100%",
-              height: "100%",
-              borderRadius: "10px",
-              overflowY: "hidden",
-              bgcolor: "#E5E5E5",
-              padding: 3,
-            }}
-          >
-            {loading ? (
-              <CircularProgress
+          <Typography sx={{ fontSize: "0.72rem", color: isOnline ? "success.main" : "text.disabled" }}>
+            {isGroup ? `${selectedChat?.users?.length} members` : isOnline ? "Online" : "Offline"}
+          </Typography>
+        </Box>
+
+        {/* Feature toggles */}
+        {!isGroup && (
+          <Box display="flex" alignItems="center" gap={1}>
+            <Tooltip title={isEmoteOn ? "Emotion detection ON" : "Emotion detection OFF"}>
+              <Box
+                onClick={() => setIsEmoteOn(!isEmoteOn)}
                 sx={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  height: "50px",
-                  width: "50px",
+                  display: "flex", alignItems: "center", gap: 0.6,
+                  px: 1.2, py: 0.5, borderRadius: "20px", cursor: "pointer",
+                  border: "1px solid",
+                  borderColor: isEmoteOn ? "primary.main" : "divider",
+                  bgcolor: isEmoteOn ? "primary.main" : "transparent",
+                  transition: "all 0.18s ease",
+                  "&:hover": {
+                    borderColor: "primary.main",
+                    bgcolor: isEmoteOn ? "primary.dark" : "action.hover",
+                  },
                 }}
-              />
-            ) : (
-              <div
-                className="flex flex-col overflow-y-scroll "
-                style={{ scrollbarWidth: "none" }}
               >
-                <ScrollableFeed messages={messages} emotion={emotion} />
-              </div>
-            )}
-            <FormControl onKeyDown={sendMessage} required sx={{ mt: 3 }}>
-              {istyping && (
-                <Lottie
-                  options={defaultOptions}
-                  // height={50}
-                  width={70}
-                  style={{ marginBottom: 15, marginLeft: 0 }}
-                />
-              )}
-              <Input
-                placeholder="Type a message"
-                value={newMessage}
-                onChange={typingHandler}
+                <EmojiEmotions sx={{ fontSize: 13, color: isEmoteOn ? "white" : "text.secondary" }} />
+                <Typography sx={{
+                  fontSize: "0.7rem", fontWeight: 600, lineHeight: 1,
+                  color: isEmoteOn ? "white" : "text.secondary",
+                  userSelect: "none",
+                }}>
+                  Emote
+                </Typography>
+              </Box>
+            </Tooltip>
+
+            <Tooltip title={isTranslateOn ? "Auto-translate ON" : "Auto-translate OFF"}>
+              <Box
+                onClick={() => setIsTranslateOn(!isTranslateOn)}
                 sx={{
-                  bgcolor: "#c9e7c9",
-                  "& input": { padding: "10px", fontSize: "16px" },
+                  display: "flex", alignItems: "center", gap: 0.6,
+                  px: 1.2, py: 0.5, borderRadius: "20px", cursor: "pointer",
+                  border: "1px solid",
+                  borderColor: isTranslateOn ? "primary.main" : "divider",
+                  bgcolor: isTranslateOn ? "primary.main" : "transparent",
+                  transition: "all 0.18s ease",
+                  "&:hover": {
+                    borderColor: "primary.main",
+                    bgcolor: isTranslateOn ? "primary.dark" : "action.hover",
+                  },
                 }}
-              />
-            </FormControl>
+              >
+                <Translate sx={{ fontSize: 13, color: isTranslateOn ? "white" : "text.secondary" }} />
+                <Typography sx={{
+                  fontSize: "0.7rem", fontWeight: 600, lineHeight: 1,
+                  color: isTranslateOn ? "white" : "text.secondary",
+                  userSelect: "none",
+                }}>
+                  Translate
+                </Typography>
+              </Box>
+            </Tooltip>
           </Box>
-        </div>
+        )}
+
+        {isGroup
+          ? <UpdateGroupChatModal fetchAgain={fetchAgain} setFetchAgain={setFetchAgain} fetchMessages={fetchMessages} />
+          : <ProfileModal user={senderFull} />
+        }
+
+        <Tooltip title="More">
+          <IconButton size="small" onClick={(e) => setMenuAnchor(e.currentTarget)}
+            sx={{ color: "text.disabled", "&:hover": { color: "text.secondary" } }}>
+            <MoreVertIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+
+        <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+          <MenuItem
+            onClick={() => { setMenuAnchor(null); setConfirmDialog({ open: true, type: "clear", messageId: null }); }}
+            sx={{ gap: 1.5, color: "#DC2626", fontSize: "0.875rem" }}
+          >
+            <ClearAll sx={{ fontSize: 16 }} /> Clear Chat
+          </MenuItem>
+        </Menu>
+      </Box>
+
+      {/* ── Messages ── */}
+      <Box sx={{
+        flex: 1, minHeight: 0, overflowY: "auto", px: 2, py: 1.5,
+        bgcolor: "background.default", display: "flex", flexDirection: "column",
+      }}>
+        {loading ? (
+          <Box display="flex" justifyContent="center" alignItems="center" flex={1}>
+            <CircularProgress size={28} sx={{ color: "primary.main" }} />
+          </Box>
+        ) : (
+          <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
+            <ScrollableFeed
+              messages={messages}
+              emotion={emotion}
+              onDeleteMessage={(id) => setConfirmDialog({ open: true, type: "message", messageId: id })}
+            />
+          </Box>
+        )}
+      </Box>
+
+      {/* ── Typing indicator ── */}
+      {istyping && (
+        <Box sx={{ px: 2, py: 0.5, bgcolor: "background.default" }}>
+          <Box sx={{
+            display: "inline-flex", alignItems: "center", gap: 1,
+            bgcolor: "background.paper", borderRadius: "12px 12px 12px 4px",
+            px: 1.5, py: 0.8,
+            border: "1px solid", borderColor: "divider",
+          }}>
+            <Lottie options={defaultOptions} width={36} style={{ margin: 0 }} />
+            <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>typing...</Typography>
+          </Box>
+        </Box>
       )}
-      {showAmountInput && (
-        <AmountInput
-          isGroupChat={selectedChat.isGroupChat}
-          onClose={() => setShowAmountInput(false)}
-        />
-      )}
-    </>
+
+      {/* ── Input bar ── */}
+      <Box sx={{ flexShrink: 0, position: "relative", borderTop: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}>
+        {showEmojiPicker && (
+          <ClickAwayListener onClickAway={() => setShowEmojiPicker(false)}>
+            <Box sx={{ position: "absolute", bottom: "100%", left: 8, zIndex: 100, mb: 1 }}>
+              <EmojiPickerReact
+                onEmojiClick={(e) => setNewMessage((p) => p + e.emoji)}
+                height={360} width={300}
+                skinTonesDisabled
+                previewConfig={{ showPreview: false }}
+              />
+            </Box>
+          </ClickAwayListener>
+        )}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 2, py: 1.2 }}>
+          <Tooltip title="Emoji">
+            <IconButton size="small" onClick={() => setShowEmojiPicker((p) => !p)} sx={{
+              color: showEmojiPicker ? "primary.main" : "text.disabled", flexShrink: 0,
+              "&:hover": { color: "primary.main" },
+            }}>
+              <EmojiEmotions sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+
+          <Box sx={{
+            flex: 1, display: "flex", alignItems: "center",
+            bgcolor: "background.default", borderRadius: "8px", px: 1.5, py: 0.6,
+            border: "1px solid", borderColor: "divider",
+            "&:focus-within": { borderColor: "primary.main", bgcolor: "background.paper" },
+          }}>
+            <InputBase
+              fullWidth placeholder="Write a message..."
+              value={newMessage} onChange={typingHandler}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+              sx={{ fontSize: "0.875rem" }}
+            />
+          </Box>
+
+          <IconButton onClick={sendMessage} disabled={!newMessage.trim()} sx={{
+            width: 34, height: 34, flexShrink: 0, borderRadius: "8px",
+            bgcolor: newMessage.trim() ? "primary.main" : "action.hover",
+            color: newMessage.trim() ? "white" : "text.disabled",
+            "&:hover": { bgcolor: newMessage.trim() ? "primary.dark" : "action.selected" },
+          }}>
+            <Send sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Box>
+      </Box>
+
+      {/* ── Confirm Dialog ── */}
+      <Dialog open={confirmDialog.open} onClose={closeConfirm}
+        PaperProps={{ sx: { borderRadius: "10px", minWidth: 320, border: "none" } }}>
+        <DialogTitle sx={{ fontWeight: 600, fontSize: "0.95rem", pb: 1 }}>
+          {confirmDialog.type === "clear" ? "Clear Chat" : "Delete Message"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: "0.875rem", color: "text.secondary" }}>
+            {confirmDialog.type === "clear"
+              ? "All messages in this chat will be permanently deleted. This cannot be undone."
+              : "This message will be permanently deleted. This cannot be undone."}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button onClick={closeConfirm} variant="outlined" size="small"
+            sx={{ borderRadius: "7px", borderColor: "divider", color: "text.secondary", "&:hover": { borderColor: "text.disabled" } }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => confirmDialog.type === "clear" ? clearChat() : deleteMessage(confirmDialog.messageId)}
+            variant="contained" color="error" size="small"
+            sx={{ borderRadius: "7px" }}
+          >
+            {confirmDialog.type === "clear" ? "Clear All" : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+    </Box>
   );
 };
 

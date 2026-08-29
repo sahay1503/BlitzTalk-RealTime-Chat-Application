@@ -53,10 +53,15 @@ const io = new socketIOServer(server, {
   },
 });
 
+const onlineUsers = new Map();
+
 io.on("connection", (socket) => {
   console.log("New connection");
   socket.on("setup", (userData) => {
     socket.join(userData._id);
+    socket.userId = userData._id;
+    onlineUsers.set(userData._id, userData._id);
+    io.emit("online users", Array.from(onlineUsers.keys()));
     socket.emit("connected");
   });
   socket.on("join chat", (room) => {
@@ -86,6 +91,13 @@ io.on("connection", (socket) => {
   socket.off("setup", () => {
     console.log("USER DISCONNECTED");
     socket.leave(userData._id);
+  });
+
+  socket.on("disconnect", () => {
+    if (socket.userId) {
+      onlineUsers.delete(socket.userId);
+      io.emit("online users", Array.from(onlineUsers.keys()));
+    }
   });
 });
 

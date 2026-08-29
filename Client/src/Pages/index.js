@@ -1,3 +1,4 @@
-import Home from "./Home";
+import Landing from "./Landing";
+import Auth from "./Auth";
 import Chat from "./Chat";
-export { Chat, Home };
+export { Landing, Auth, Chat };
