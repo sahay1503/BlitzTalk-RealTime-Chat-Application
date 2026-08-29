@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://blitztalk-realtime-chat-application-1.onrender.com/api/:path*"
+      "destination": "https://blitztalk-back.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
